@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from coldstore.ammonia import Monitor
+from coldstore.attribution import AttributionRegistry
 from coldstore.audit import Auditor
 from coldstore.comp import Bank
 from coldstore.defrost import Controller
@@ -40,3 +41,4 @@ class Runtime:
         self.accumulator = Accumulator(store)
         self.auditor = Auditor(store)
         self.scheduler = Scheduler(store)
+        self.attribution = AttributionRegistry(store)

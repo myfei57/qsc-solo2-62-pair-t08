@@ -19,6 +19,7 @@ from coldstore.temp import validate_temp
 from coldstore.valve import OPEN, validate_valve
 
 from . import checks, history, ops
+from . import attribution as attribution_module
 from . import describe as describe_module
 from . import simulate as simulate_module
 from . import snapshot as snapshot_module
@@ -681,3 +682,46 @@ def cycle(server: "Server", request: Request) -> Response:
 
 def simulate(server: "Server", request: Request) -> Response:
     return simulate_module.run_simulation(server.runtime, request)
+
+
+# ---------------------------------------------------------------- attribution
+
+
+def attribution_register(server: "Server", request: Request) -> Response:
+    return attribution_module.attribution_register(server, request)
+
+
+def attribution_point_in_time(server: "Server", request: Request) -> Response:
+    return attribution_module.attribution_point_in_time(server, request)
+
+
+def attribution_lookup(server: "Server", request: Request) -> Response:
+    return attribution_module.attribution_lookup(server, request)
+
+
+def attribution_zone(server: "Server", request: Request) -> Response:
+    return attribution_module.attribution_zone(server, request)
+
+
+def attribution_versions(server: "Server", request: Request) -> Response:
+    return attribution_module.attribution_versions(server, request)
+
+
+def attribution_migrations(server: "Server", request: Request) -> Response:
+    return attribution_module.attribution_migrations(server, request)
+
+
+def attribution_confirm(server: "Server", request: Request) -> Response:
+    return attribution_module.attribution_confirm(server, request)
+
+
+def attribution_activate(server: "Server", request: Request) -> Response:
+    return attribution_module.attribution_activate(server, request)
+
+
+def attribution_align(server: "Server", request: Request) -> Response:
+    return attribution_module.attribution_align(server, request)
+
+
+def attribution_ledger(server: "Server", request: Request) -> Response:
+    return attribution_module.attribution_ledger(server, request)

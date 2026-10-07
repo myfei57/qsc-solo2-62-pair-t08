@@ -482,5 +482,108 @@ class WsgiCase(unittest.TestCase):
             store.close()
 
 
+class AttributionConsoleCase(unittest.TestCase):
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.store = Store.open(f"{self._tmp.name}/state.json")
+        seed_defaults(self.store)
+        self.server = Server(self.store)
+
+    def tearDown(self) -> None:
+        self.store.close()
+        self._tmp.cleanup()
+
+    def call(self, method: str, path: str, payload: dict | None = None):
+        response = self.server.dispatch(method, path, payload)
+        parsed = json.loads(response.body.decode("utf-8"))
+        return response.status, parsed
+
+    def test_register_lookup_ledger_over_console(self) -> None:
+        status, record = self.call(
+            "POST", "/attribution/register",
+            {"kind": "comp", "id": "C-1", "zone": 3, "operator": "zhang"},
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(record["status"], "active")
+
+        status, page = self.call("GET", "/attribution")
+        self.assertEqual(status, 200)
+        self.assertEqual(page["count"], 1)
+        self.assertEqual(page["active"][0]["zone"], 3)
+
+        status, found = self.call(
+            "POST", "/attribution/lookup", {"kind": "comp", "id": "C-1"}
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(found["attribution"]["zone"], 3)
+
+        status, ledger = self.call("GET", "/attribution/ledger")
+        self.assertEqual(status, 200)
+        self.assertTrue(ledger["intact"])
+        self.assertIn("register", [entry["kind"] for entry in ledger["entries"]])
+
+    def test_conflict_quarantine_and_confirm_flow(self) -> None:
+        self.call(
+            "POST", "/attribution/register",
+            {"kind": "ammonia", "id": "A-1", "zone": 2, "operator": "zhang"},
+        )
+        status, conflict = self.call(
+            "POST", "/attribution/register",
+            {"kind": "ammonia", "id": "A-1", "zone": 4, "operator": "li"},
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(conflict["status"], "quarantined")
+
+        status, bad = self.call(
+            "POST", "/attribution/confirm",
+            {"version": conflict["version"], "confirmer": "li"},
+        )
+        self.assertEqual(status, 400)
+
+        status, confirmed = self.call(
+            "POST", "/attribution/confirm",
+            {"version": conflict["version"], "confirmer": "wang"},
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(confirmed["status"], "scheduled")
+
+        status, migrations = self.call("GET", "/attribution/migrations")
+        self.assertEqual(status, 200)
+        self.assertEqual(len(migrations["migrations"]), 2)
+
+    def test_immediate_change_requires_confirmer(self) -> None:
+        self.call(
+            "POST", "/attribution/register",
+            {"kind": "fan", "id": "F-1", "zone": 1, "operator": "zhang"},
+        )
+        status, denied = self.call(
+            "POST", "/attribution/register",
+            {
+                "kind": "fan", "id": "F-1", "zone": 2, "operator": "zhang",
+                "mode": "immediate", "confirmer": "zhang",
+                "confirm_handover": True,
+            },
+        )
+        self.assertEqual(status, 400)
+
+        status, record = self.call(
+            "POST", "/attribution/register",
+            {
+                "kind": "fan", "id": "F-1", "zone": 2, "operator": "zhang",
+                "mode": "immediate", "confirmer": "wang",
+                "confirm_handover": True,
+            },
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(record["status"], "active")
+
+    def test_attribution_routes_are_catalogued(self) -> None:
+        paths = {route.path for route in route_table()}
+        self.assertIn("/attribution", paths)
+        self.assertIn("/attribution/register", paths)
+        self.assertIn("/attribution/align", paths)
+        self.assertIn("/attribution/ledger", paths)
+
+
 if __name__ == "__main__":
     unittest.main()
