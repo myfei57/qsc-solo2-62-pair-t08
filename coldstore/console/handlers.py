@@ -20,6 +20,7 @@ from coldstore.valve import OPEN, validate_valve
 
 from . import checks, history, ops
 from . import describe as describe_module
+from . import ownership as ownership_handlers
 from . import simulate as simulate_module
 from . import snapshot as snapshot_module
 from . import telemetry as telemetry_module
@@ -681,3 +682,22 @@ def cycle(server: "Server", request: Request) -> Response:
 
 def simulate(server: "Server", request: Request) -> Response:
     return simulate_module.run_simulation(server.runtime, request)
+
+
+# Versioned ownership registry pages ----------------------------------------
+
+ownership_register = ownership_handlers.ownership_register
+ownership_query_subject = ownership_handlers.ownership_query_subject
+ownership_query_zone = ownership_handlers.ownership_query_zone
+ownership_query_room = ownership_handlers.ownership_query_room
+ownership_history = ownership_handlers.ownership_history
+ownership_conflicts = ownership_handlers.ownership_conflicts
+ownership_resolve = ownership_handlers.ownership_resolve
+ownership_migration_begin = ownership_handlers.ownership_migration_begin
+ownership_migration_dual_run = ownership_handlers.ownership_migration_dual_run
+ownership_migration_cutover = ownership_handlers.ownership_migration_cutover
+ownership_migration_complete = ownership_handlers.ownership_migration_complete
+ownership_migration_rollback = ownership_handlers.ownership_migration_rollback
+ownership_migration_view = ownership_handlers.ownership_migration_view
+ownership_activate = ownership_handlers.ownership_activate
+ownership_trace = ownership_handlers.ownership_trace

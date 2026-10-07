@@ -410,6 +410,113 @@ class ConsoleCase(unittest.TestCase):
         self.assertIn("metric,value", body)
         self.assertIn("store_keys", body)
 
+    def test_ownership_routes(self) -> None:
+        # Initial ownership, effective at a past point so it is live now.
+        status, body = self.call(
+            "POST",
+            "/ownership/register",
+            {
+                "kind": "compressor",
+                "subject": "c1",
+                "room": "room-a",
+                "zone": 1,
+                "effective": "emergency",
+                "valid_from": 1_000_000_000,
+                "by": "chief",
+                "reason": "phase 1",
+            },
+        )
+        self.assertEqual(status, 200)
+        old_id = body["version"]["version_id"]
+        self.assertEqual(body["version"]["status"], "active")
+
+        status, body = self.call(
+            "POST", "/ownership/query", {"kind": "compressor", "subject": "c1"}
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(body["results"][0]["owner_room_id"], "room-a")
+        self.assertIn("fingerprint", body)
+
+        status, body = self.call("POST", "/ownership/zone", {"zone": 1})
+        self.assertEqual(status, 200)
+        self.assertEqual([item["subject_id"] for item in body["results"]], ["c1"])
+
+        # Cross period migration with immediate cutover: old and new coexist
+        # through dual run, then the new ownership takes over.
+        status, body = self.call(
+            "POST",
+            "/ownership/migration/begin",
+            {
+                "kind": "compressor",
+                "subject": "c1",
+                "room": "room-b",
+                "zone": 2,
+                "old_version_id": old_id,
+                "note": "phase 3 expansion",
+            },
+        )
+        self.assertEqual(status, 200)
+        migration_id = body["migration"]["migration_id"]
+        self.assertEqual(body["version"]["status"], "planned")
+
+        status, body = self.call(
+            "POST", "/ownership/migration/dual-run", {"migration_id": migration_id}
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(body["migration"]["status"], "dual_run")
+
+        status, body = self.call(
+            "GET", "/ownership/migration", {"migration_id": migration_id}
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(body["old"]["owner_room_id"], "room-a")
+        self.assertEqual(body["new"]["owner_room_id"], "room-b")
+
+        status, body = self.call(
+            "POST",
+            "/ownership/migration/cutover",
+            {"migration_id": migration_id, "immediate": "true"},
+        )
+        self.assertEqual(status, 200)
+        status, body = self.call(
+            "POST", "/ownership/migration/complete", {"migration_id": migration_id}
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(body["migration"]["status"], "completed")
+
+        _, body = self.call("POST", "/ownership/query", {"kind": "compressor", "subject": "c1"})
+        self.assertEqual(body["results"][0]["owner_room_id"], "room-b")
+
+        status, body = self.call(
+            "POST",
+            "/ownership/query",
+            {"kind": "compressor", "subject": "c1", "as_of": 1_000_000_001},
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(body["results"][0]["owner_room_id"], "room-a")
+
+        status, body = self.call(
+            "GET", "/ownership/history", {"kind": "compressor", "subject": "c1"}
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(len(body["versions"]), 2)
+
+        status, body = self.call("GET", "/ownership/conflicts")
+        self.assertEqual(status, 200)
+        self.assertEqual(body["conflicts"], [])
+
+        status, trace = self.call("GET", "/ownership/trace")
+        self.assertEqual(status, 200)
+        ops = {entry["op"] for entry in trace["trace"]}
+        self.assertIn("register", ops)
+        self.assertIn("query", ops)
+        self.assertIn("migration_cutover", ops)
+
+        status, error = self.call(
+            "POST", "/ownership/register", {"kind": "pump", "subject": "x", "room": "r", "zone": 1}
+        )
+        self.assertEqual(status, 400)
+
     def test_metrics_and_errors(self) -> None:
         self.call("GET", "/health")
         status, body = self.call("GET", "/metrics")

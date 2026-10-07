@@ -10,6 +10,7 @@ from coldstore.evap import Condenser
 from coldstore.fan import FanSet
 from coldstore.interlock import Interlock
 from coldstore.load import LoadCalculator
+from coldstore.ownership import OwnershipRegistry
 from coldstore.quota import Accumulator
 from coldstore.room import RoomRegistry
 from coldstore.scheduler import Scheduler
@@ -40,3 +41,4 @@ class Runtime:
         self.accumulator = Accumulator(store)
         self.auditor = Auditor(store)
         self.scheduler = Scheduler(store)
+        self.ownership = OwnershipRegistry(store, auditor=self.auditor)
